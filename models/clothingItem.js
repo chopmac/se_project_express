@@ -1,44 +1,34 @@
-const mongoose = require('mongoose');
-const validator = require('validator');
 
-const clothingItemSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: true,
-    minlength: 2,
-    maxlength: 30,
-  },
-  weather: {
-    type: String,
-    required: true,
-    enum: ['hot', 'warm', 'cold'],
-  },
-  imageUrl: {
-    type: String,
-    required: true,
-    validate: {
-      validator(value) {
-        return validator.isURL(value);
-      },
-      message: 'You must enter a valid URL',
-    },
-  },
-  owner: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'user',
-    required: true,
-  },
-  likes: {
-    type: [{
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'user',
-    }],
-    default: [],
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-});
+const ClothingItem = require("../models/clothingItem");
+const {
+  INVALID_DATA,
+  NOT_FOUND,
+  FORBIDDEN,
+  DEFAULT_ERROR
+} = require("../utils/errors");
 
-module.exports = mongoose.model('clothingItem', clothingItemSchema);
+module.exports.deleteItem = (req, res) => {
+  const { itemId } = req.params;
+  const userId = req.user._id;
+
+  ClothingItem.findById(itemId)
+    .orFail()
+    .then((item) => {
+      if (item.owner.toString() !== userId) {
+        return res.status(FORBIDDEN || 403).send({ message: "You do not have permission to delete this item" });
+      }
+
+      return ClothingItem.findByIdAndRemove(itemId)
+        .then(() => res.send({ message: "Item deleted" }));
+    })
+    .catch((err) => {
+      console.error(err);
+      if (err.name === "DocumentNotFoundError") {
+        return res.status(NOT_FOUND).send({ message: "Item not found" });
+      }
+      if (err.name === "CastError") {
+        return res.status(INVALID_DATA).send({ message: "Invalid item ID format" });
+      }
+      return res.status(DEFAULT_ERROR).send({ message: "An error has occurred on the server" });
+    });
+};
